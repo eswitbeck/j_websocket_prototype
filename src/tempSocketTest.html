@@ -1,0 +1,49 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>test for websockets</title>
+  </head>
+  <body>
+    <button id="room_a">connect to room a</button>
+    <button id="room_b">connect to room b</button>
+    <button id="host_a">claim host for room a</button>
+    <button id="host_b">claim host for room b</button>
+    <script>
+      const buttonA = document.querySelector('#room_a');
+      const buttonB = document.querySelector('#room_b');
+
+      const hostA = document.querySelector('#host_a');
+      const hostB = document.querySelector('#host_b');
+
+      const user_id = Math.floor(Math.random() * 100);
+
+      const socket = new WebSocket('ws://localhost:3000/roomSocket');
+      const sendMessage = (type, user_id, room_id, text) => {
+        const sentObject = text
+          ? { type, user_id, room_id, text }
+          : { type, user_id, room_id }
+        socket.send(JSON.stringify(sentObject));
+        return;
+      }
+
+      buttonA.addEventListener('click', () => {
+        sendMessage('room_init', user_id, 1);
+      });
+      buttonB.addEventListener('click', () => {
+        sendMessage('room_init', user_id, 2);
+      });
+
+      hostA.addEventListener('click', () => {
+        sendMessage('claim_host', user_id, 1);
+      });
+      hostB.addEventListener('click', () => {
+        sendMessage('claim_host', user_id, 2);
+      });
+
+      socket.onmessage = e => {
+        console.log('message in:', e.data);
+      }
+    </script>
+  </body>
+</html>

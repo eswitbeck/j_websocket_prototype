@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import { handleSocket } from './roomWebSocket';
 import ErrorObj from './util/errorHandling';
 const app = express();
 
@@ -21,4 +22,5 @@ function globalErrorHandler (
 };
 
 const PORT = 3000;
-app.listen(PORT, () => { console.log(`listening on ${PORT}`); });
+const server = app.listen(PORT, () => { console.log(`listening on ${PORT}`); });
+handleSocket(server);
