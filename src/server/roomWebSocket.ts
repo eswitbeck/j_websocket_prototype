@@ -86,7 +86,6 @@ export const handleSocket = (server: Server) => {
      // force username immediately
      if (userInfo.username === null) userInfo.username = `User_${user_id}`;
      
-     // case switch for types
      switch(type) {
        case 'room_init':
          // as long as not already in room
@@ -131,16 +130,37 @@ export const handleSocket = (server: Server) => {
          break;
        case 'post_question':
          // confirm in room
+         if (!userInfo.rooms.includes(room_id)) ws.send('Not in room');
          // confirm is host
+         else if (rooms[room_id].host?.socket_id !== socketId) ws.send('Not host.');
          // update db?
          // broadcast to rel clients
-         // send ok
+         else {
+           const { text } = message;
+           // change for client updates
+           const questionText = `Host ${userInfo.username} prompted:
+             ${text}.`
+           broadcastFrom(room_id, socketId, questionText);
+           ws.send('question posted.');
+         }
          break;
        case 'post_response':
+         // TODO: needs question id to reply to
          // confirm in room
+         if (!userInfo.rooms.includes(room_id)) ws.send('Not in room');
          // confirm is not host
+         else if (rooms[room_id].host?.socket_id === socketId) ws.send("Can't send as host.");
+         // if no host claimed
+         else if (rooms[room_id].host === null) ws.send('Game will start when host is claimed');
          // update db?
          // send to host
+         else {
+           const host = rooms[room_id].host;
+           const replyText = `Reply from ${userInfo.username}:
+             ${message.text}`;
+           socketIndex[host.socket_id].socket.send(replyText);
+           ws.send('sent response.');
+         }
          break;
        case 'choose_response':
          // confirm in room
@@ -149,15 +169,14 @@ export const handleSocket = (server: Server) => {
          // broadcast to rel clients
          break;
        case 'change_username':
-         const { text } = message;
          // update socketIndex
          const oldUsername = userInfo.username;
-         userInfo.username = text;
+         userInfo.username = message.text;
          // update rooms
          userInfo.rooms.map(room_id => {
            const room = rooms[room_id];
            // check host
-           if (room?.host.socket_id === socketId)
+           if (room.host?.socket_id === socketId)
              room.host.username = userInfo.username;
            // check connections
            const roomUserState = room.connections.find(({ socket_id }) => 
