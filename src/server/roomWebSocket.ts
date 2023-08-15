@@ -39,6 +39,8 @@ interface UserRoomIndex {
 }
 
 const connections: Connections = {};
+// superior method would be with uuid
+const idMap: Map<WebSocket, number> = new Map();
 const rooms: Rooms = {};
 const userRoomIndex: UserRoomIndex = {};
 
@@ -66,7 +68,10 @@ export const handleSocket = (server: Server) => {
      switch(type) {
        case 'room_init':
          // confirm tracking connection
-         if (!connections[user_id]) connections[user_id] = ws;
+         if (!connections[user_id]) {
+           connections[user_id] = ws;
+           idMap.set(ws, user_id);
+         }
          if (!userRoomIndex[user_id]) userRoomIndex[user_id] = [];
          // as long as not already in room
          if (!userRoomIndex[user_id].includes(room_id)) {
@@ -90,6 +95,7 @@ export const handleSocket = (server: Server) => {
            broadcastFrom(room_id, user_id, `${username} connected`);
          }
          // send all room info
+         ws.send(`${user_id}, ${idMap.get(ws)}`);
          ws.send(JSON.stringify(rooms[room_id]));
          break;
        case 'claim_host':
@@ -132,10 +138,26 @@ export const handleSocket = (server: Server) => {
      }
 
      ws.on('close', () => {
-       // clear up db
-       // clear up memory
-       // (room, roomIndex, user)
-       // broadcast update to clients
+       const user_id = idMap.get(ws);
+       // otherwise close fires twice, firing an error
+       if (user_id !== undefined) {
+         const username = 'filler'; // again, need proper fetch
+         const room_ids = userRoomIndex[user_id];
+         room_ids.map(room_id => {
+           const room = rooms[room_id];
+           // broadcast disconnect
+           broadcastFrom(room_id, user_id, `${username} disconnected`);
+           // update rooms
+           if (rooms[room_id].host === user_id) rooms[room_id].host = null;
+           rooms[room_id].players = rooms[room_id].players
+             .filter((uState: UserState) => uState.user_id !== user_id);
+         });
+         // clear up db
+         // update userRoomIndex, connections, idMap
+         delete userRoomIndex[user_id];
+         delete connections[user_id];
+         idMap.delete(ws);
+       }
      });
    });
 
