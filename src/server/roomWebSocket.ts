@@ -1,3 +1,5 @@
+// TODO filter out messages to clients on connect
+// TODO add health checks to connections
 import WebSocket, { WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { v4 as uuid } from 'uuid';
@@ -6,13 +8,14 @@ type MessageType = 'room_init' |
                    'claim_host' | 
                    'post_question' |
                    'post_response' |
-                   'choose_response';
+                   'choose_response' |
+                   'change_username';
 
 interface Message {
   type: MessageType,
   text?: string,
   user_id: number,
-  room_id: number
+  room_id?: number
 }
 
 type Socket_Id = string;
@@ -39,16 +42,13 @@ interface Host {
   username: string
 }
 
-interface Room {
-  host: Host | null,
-  connections: UserState[]
-}
-
 interface Rooms {
-  [index: string]: Room
+  [index: Room_Id]: {
+    host: Host | null,
+    connections: UserState[]
+  }
 }
 
-// superior method would be with uuid
 const socketIndex: SocketIndex = {};
 const rooms: Rooms = {};
 
@@ -148,6 +148,28 @@ export const handleSocket = (server: Server) => {
          // update db?
          // broadcast to rel clients
          break;
+       case 'change_username':
+         const { text } = message;
+         // update socketIndex
+         const oldUsername = userInfo.username;
+         userInfo.username = text;
+         // update rooms
+         userInfo.rooms.map(room_id => {
+           const room = rooms[room_id];
+           // check host
+           if (room?.host.socket_id === socketId)
+             room.host.username = userInfo.username;
+           // check connections
+           const roomUserState = room.connections.find(({ socket_id }) => 
+                                                       socket_id === socketId);
+           roomUserState.username = userInfo.username;
+           // broadcast change
+           const nameChange = `${oldUsername} changed name to ${userInfo.username}`;
+           broadcastFrom(room_id, socketId, nameChange);
+           // add error handling
+           ws.send('ok');
+         });
+         break;
      }
 
      ws.on('close', () => {
@@ -191,11 +213,13 @@ function isValidMessage (messageJSON: Message): boolean {
       typeof messageJSON.type !== 'string' ||
       !messageJSON?.user_id ||
       typeof messageJSON.user_id !== 'number' ||
-      !messageJSON?.room_id ||
-      typeof messageJSON.room_id !== 'number' ||
+      (messageJSON.type !== 'change_username' &&
+        (!messageJSON?.room_id ||
+        typeof messageJSON.room_id !== 'number')) ||
       ((messageJSON.type === 'post_question' ||
         messageJSON.type === 'post_response' ||
-        messageJSON.type === 'choose_response') &&
+        messageJSON.type === 'choose_response' ||
+        messageJSON.type === 'change_username') &&
        (!messageJSON?.text ||
         typeof messageJSON.text !== 'string'))
      ) return false;
