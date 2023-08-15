@@ -1,5 +1,6 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import { Server } from 'http';
+import { v4 as uuid } from 'uuid';
 
 type MessageType = 'room_init' |
                    'claim_host' | 
@@ -14,35 +15,42 @@ interface Message {
   room_id: number
 }
 
+type Socket_Id = string;
+type Room_Id = number;
+
+interface SocketIndex {
+  [index: Socket_Id]: {
+    user_id: number | null,
+    rooms: Room_Id[],
+    username: string | null,
+    socket: WebSocket
+  }
+}
+
 // access username on each message, or via database?
 interface UserState {
-  username: string,
   score: number,
-  user_id: number
+  socket_id: Socket_Id,
+  username: string
+}
+
+interface Host {
+  socket_id: Socket_Id,
+  username: string
 }
 
 interface Room {
-  host: number | null,
-  players: UserState[]
-}
-
-interface Connections {
-  [index: string]: WebSocket
+  host: Host | null,
+  connections: UserState[]
 }
 
 interface Rooms {
   [index: string]: Room
 }
 
-interface UserRoomIndex {
-  [index: string]: number[]
-}
-
-const connections: Connections = {};
 // superior method would be with uuid
-const idMap: Map<WebSocket, number> = new Map();
+const socketIndex: SocketIndex = {};
 const rooms: Rooms = {};
-const userRoomIndex: UserRoomIndex = {};
 
 export const handleSocket = (server: Server) => {
   const wss = new WebSocketServer({
@@ -51,6 +59,14 @@ export const handleSocket = (server: Server) => {
   });
 
  wss.on('connection', ws => {
+   const socketId = uuid();
+   socketIndex[socketId] = {
+     user_id: null,
+     rooms: [],
+     username: null,
+     socket: ws
+   };
+
    ws.on('error', err => {
      console.error(err);
      // send notice to client
@@ -64,54 +80,51 @@ export const handleSocket = (server: Server) => {
        return;
      }
      const { type, user_id, room_id } = message;
+     const userInfo = socketIndex[socketId];
+     // confirm id info tracked
+     if (userInfo.user_id === null) userInfo.user_id = user_id;
+     // force username immediately
+     if (userInfo.username === null) userInfo.username = `User_${user_id}`;
+     
      // case switch for types
      switch(type) {
        case 'room_init':
-         // confirm tracking connection
-         if (!connections[user_id]) {
-           connections[user_id] = ws;
-           idMap.set(ws, user_id);
-         }
-         if (!userRoomIndex[user_id]) userRoomIndex[user_id] = [];
          // as long as not already in room
-         if (!userRoomIndex[user_id].includes(room_id)) {
-           const username = 'filler' // db or message?
+         if (!userInfo.rooms.includes(room_id)) {
            const uState: UserState = {
-             username,
              score: 0, // db?
-             user_id
+             socket_id: socketId,
+             username: userInfo.username
            };
-           // if first in room
+           // if first in room, initialize
            if (!rooms[room_id]) rooms[room_id] = {
              host: null,
-             players: []
+             connections: []
            };
            // (eventually, confirm allowed)
            // push to room memory
-           rooms[room_id].players.push(uState);
-           userRoomIndex[user_id].push(room_id);
+           rooms[room_id].connections.push(uState);
+           userInfo.rooms.push(room_id);
            // update db if needed
            // alert clients
-           broadcastFrom(room_id, user_id, `${username} connected`);
+           broadcastFrom(room_id, socketId, `${userInfo.username} connected`);
          }
          // send all room info
-         ws.send(`${user_id}, ${idMap.get(ws)}`);
          ws.send(JSON.stringify(rooms[room_id]));
          break;
        case 'claim_host':
          // confirm in room
-         if (!userRoomIndex[user_id].includes(room_id)) {
+         if (!userInfo.rooms.includes(room_id)) {
            ws.send('Invalid room selection'); // superfluous
          } else if (rooms[room_id].host !== null) {
          // confirm no other host
            // if yes, send already claimed
            ws.send('Host already claimed'); // superfluous
          } else {
-           const username = 'filler';
            // if not, update room, db
-           rooms[room_id].host = user_id;
+           rooms[room_id].host = { socket_id: socketId, username: userInfo.username };
            // alert relevant clients 
-           broadcastFrom(room_id, user_id, `Host claimed by: ${username}`);
+           broadcastFrom(room_id, socketId, `Host claimed by: ${userInfo.username}`);
            // send ok
            ws.send('ok');
          }
@@ -138,25 +151,23 @@ export const handleSocket = (server: Server) => {
      }
 
      ws.on('close', () => {
-       const user_id = idMap.get(ws);
+       // starting with socketId
+       const userInfo = socketIndex[socketId];
        // otherwise close fires twice, firing an error
-       if (user_id !== undefined) {
-         const username = 'filler'; // again, need proper fetch
-         const room_ids = userRoomIndex[user_id];
+       if (userInfo !== undefined) {
+         const room_ids = userInfo.rooms;
          room_ids.map(room_id => {
            const room = rooms[room_id];
            // broadcast disconnect
-           broadcastFrom(room_id, user_id, `${username} disconnected`);
+           broadcastFrom(room_id, socketId, `${userInfo.username} disconnected`);
            // update rooms
-           if (rooms[room_id].host === user_id) rooms[room_id].host = null;
-           rooms[room_id].players = rooms[room_id].players
-             .filter((uState: UserState) => uState.user_id !== user_id);
+           if (rooms[room_id].host?.socket_id === socketId) rooms[room_id].host = null;
+           rooms[room_id].connections = rooms[room_id].connections
+             .filter((uState: UserState) => uState.socket_id !== socketId);
          });
          // clear up db
-         // update userRoomIndex, connections, idMap
-         delete userRoomIndex[user_id];
-         delete connections[user_id];
-         idMap.delete(ws);
+         // clean up user
+         delete socketIndex[socketId];
        }
      });
    });
@@ -191,12 +202,12 @@ function isValidMessage (messageJSON: Message): boolean {
    else return true;
 }
 
-function broadcastFrom (room_id: number, from_id: number, message: string) {
-  rooms[room_id].players
-    .filter((userState: UserState) => userState.user_id !== from_id)
+function broadcastFrom (room_id: number, from_id: Socket_Id, message: string) {
+  rooms[room_id].connections
+    .filter((userState: UserState) => userState.socket_id !== from_id)
     .map((userState: UserState)  => {
-      const { user_id } = userState;
-      const socket = connections[user_id];
+      const { socket_id } = userState;
+      const socket = socketIndex[socket_id].socket;
       socket.send(message); // TODO fill out so client can update
     });
 }
