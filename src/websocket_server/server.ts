@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { handleSocket } from './roomWebSocket';
-import ErrorObj from './util/errorHandling';
+import ErrorObj from '../util/errorHandling';
 const app = express();
 
 app.use(express.json()); 
