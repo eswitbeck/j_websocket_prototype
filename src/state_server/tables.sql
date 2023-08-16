@@ -11,7 +11,8 @@ CREATE TABLE Rooms (
 CREATE TABLE Questions (
   id SERIAL PRIMARY KEY,
   user_id int NOT NULL,
-  room_id int NOT NULL
+  room_id int NOT NULL,
+  text varchar(255)
 );
 
 CREATE TABLE Replies (
