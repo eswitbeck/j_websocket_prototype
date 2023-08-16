@@ -5,7 +5,7 @@ CREATE TABLE Users (
 
 CREATE TABLE Rooms (
   id SERIAL PRIMARY KEY,
-  name varchar(20),
+  name varchar(20)
 );
 
 CREATE TABLE Questions (
