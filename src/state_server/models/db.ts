@@ -1,5 +1,5 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
+console.log(process.env.PG_URI);
 import pg from 'pg';
 const Pool = pg.Pool;
 

@@ -11,11 +11,11 @@ interface QuestionController {
 export const questionController: QuestionController = {
   addQuestion: (req: Request, res: Response, next: NextFunction) => {
     // needs text, user_id, room_id
-    if (req.body.text === undefined || typeof req.body.text !== 'string'
-        req.body.user_id === undefined || typeof req.body.user_id !== 'number'
+    if (req.body.text === undefined || typeof req.body.text !== 'string' ||
+        req.body.user_id === undefined || typeof req.body.user_id !== 'number' ||
         req.body.room_id === undefined || typeof req.body.room_id !== 'number') {
       next(new ErrorObj('questionController: addQuestion',
-                        'Missing parameters'
+                        'Missing parameters',
                         400,
                         'Missing one of: text, user_id, room_id'));
       return;
@@ -42,7 +42,7 @@ export const questionController: QuestionController = {
   },
   updateQuestion: (req: Request, res: Response, next: NextFunction) => {
     // verify body (text and question_id)
-    if (req.body.text === undefined || typeof req.body.questionname !== 'string' ||
+    if (req.body.text === undefined || typeof req.body.text !== 'string' ||
         req.params.id === undefined) {
       next(new ErrorObj('questionController: updateQuestion',
                         'text or id not provided',
