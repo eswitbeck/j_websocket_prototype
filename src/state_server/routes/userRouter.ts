@@ -7,7 +7,7 @@ router.post('/', userController.addUser, (req: Request, res: Response, next: Nex
   res.status(201).json(res.locals.user);
 });
 
-router.put('/', userController.updateUser, (req: Request, res: Response, next: NextFunction): void => {
+router.put('/:id', userController.updateUser, (req: Request, res: Response, next: NextFunction): void => {
   res.status(201).json(res.locals.user);
 });
 

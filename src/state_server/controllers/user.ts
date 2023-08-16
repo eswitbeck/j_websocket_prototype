@@ -42,7 +42,7 @@ export const userController: UserController = {
   updateUser: (req: Request, res: Response, next: NextFunction) => {
     // verify body (username and user_id)
     if (req.body.username === undefined || typeof req.body.username !== 'string' ||
-        req.body.user_id === undefined || typeof req.body.user_id !== 'number') {
+        req.params.id === undefined) {
       next(new ErrorObj('userController: updateUser',
                         'username or id not provided',
                         400,
@@ -50,13 +50,14 @@ export const userController: UserController = {
       return;
     } else {
       // extract body
-      const { user_id, username } = req.body;
+      const { username } = req.body;
+      const { id } = req.params;
       // update user
       const updateString = `
         UPDATE Users SET username = $2 WHERE id = $1
         RETURNING *;
       `;
-      query(updateString, [user_id, username], (err, result) => {
+      query(updateString, [id, username], (err, result) => {
         if (err) {
           next(new ErrorObj('userController: udpateUser',
                             generateQueryError(err),
@@ -64,6 +65,13 @@ export const userController: UserController = {
           return;
         }
         // respond
+        if (!result.rows.length) {
+          next(new ErrorObj('userController: udpateUser',
+                            'User does not exist',
+                            400,
+                            'Can only update existing users. Confirm user_id is correct'));
+          return;
+        }
         res.locals.user = result.rows[0];
         next();
       });
