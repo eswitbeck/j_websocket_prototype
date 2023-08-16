@@ -34,10 +34,12 @@ export const roomController: RoomController = {
     }
     query(insertString, params, (err, result) => {
       if (err) {
+        let tooLong: boolean = false;
+        if (err.code === '22001') tooLong = true;
         next(new ErrorObj('roomController: addRoom',
-                          generateQueryError(err),
+                          tooLong ? 'Room name too long' : generateQueryError(err),
                           500,
-                          'Unknown failure adding room.'));
+                          tooLong ? 'Room name too long' : 'Unknown failure adding room.'));
         return;
       }
       // append to response
