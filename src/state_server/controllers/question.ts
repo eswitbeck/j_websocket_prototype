@@ -60,14 +60,14 @@ export const questionController: QuestionController = {
       `;
       query(updateString, [id, text], (err, result) => {
         if (err) {
-          next(new ErrorObj('questionController: udpateQuestion',
+          next(new ErrorObj('questionController: updateQuestion',
                             generateQueryError(err),
                             500));
           return;
         }
         // respond
         if (!result.rows.length) {
-          next(new ErrorObj('questionController: udpateQuestion',
+          next(new ErrorObj('questionController: updateQuestion',
                             'Question does not exist',
                             400,
                             'Can only update existing questions. Confirm question_id is correct'));

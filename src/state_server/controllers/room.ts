@@ -67,14 +67,14 @@ export const roomController: RoomController = {
       `;
       query(updateString, [id, name], (err, result) => {
         if (err) {
-          next(new ErrorObj('roomController: udpateRoom',
+          next(new ErrorObj('roomController: updateRoom',
                             generateQueryError(err),
                             500));
           return;
         }
         // respond
         if (!result.rows.length) {
-          next(new ErrorObj('roomController: udpateRoom',
+          next(new ErrorObj('roomController: updateRoom',
                             'Room does not exist',
                             400,
                             'Can only update existing rooms. Confirm room_id is correct'));

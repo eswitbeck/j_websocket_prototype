@@ -22,15 +22,16 @@ CREATE TABLE Replies (
   user_id int NOT NULL,
   room_id int NOT NULL,
   question_id int NOT NULL,
+  text varchar(255),
   FOREIGN KEY (user_id) REFERENCES Users(id),
   FOREIGN KEY (room_id) REFERENCES Rooms(id),
   FOREIGN KEY (question_id) REFERENCES Questions(id)
 );
 
-CREATE TABLE UserRoomState (
+CREATE TABLE UserRoomStates (
   user_id int NOT NULL,
   room_id int NOT NULL,
-  text varchar(255),
+  score int DEFAULT 0,
   FOREIGN KEY (user_id) REFERENCES Users(id),
   FOREIGN KEY (room_id) REFERENCES Rooms(id)
 );

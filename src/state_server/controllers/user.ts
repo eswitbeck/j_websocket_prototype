@@ -59,14 +59,14 @@ export const userController: UserController = {
       `;
       query(updateString, [id, username], (err, result) => {
         if (err) {
-          next(new ErrorObj('userController: udpateUser',
+          next(new ErrorObj('userController: updateUser',
                             generateQueryError(err),
                             500));
           return;
         }
         // respond
         if (!result.rows.length) {
-          next(new ErrorObj('userController: udpateUser',
+          next(new ErrorObj('userController: updateUser',
                             'User does not exist',
                             400,
                             'Can only update existing users. Confirm user_id is correct'));

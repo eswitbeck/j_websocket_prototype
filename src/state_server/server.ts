@@ -3,7 +3,8 @@ import ErrorObj from '../util/errorHandling';
 import { router as userRouter } from './routes/userRouter';
 import { router as roomRouter } from './routes/roomRouter';
 import { router as questionRouter } from './routes/questionRouter';
-//import { router as replyRouter } from './routes/replyRouter';
+import { router as replyRouter } from './routes/replyRouter';
+import { router as userRoomStateRouter } from './routes/userRoomStateRouter';
 const app = express();
 
 app.use(express.json()); 
@@ -15,7 +16,9 @@ app.use('/rooms', roomRouter)
 // /questions endpoint
 app.use('/questions', questionRouter)
 // /replies endpoint
-//app.use('/replies', replyRouter)
+app.use('/replies', replyRouter)
+// /userRoomStates endpoint
+ app.use('/userRoomStates', userRoomStateRouter)
 
 app.use(globalErrorHandler);
 function globalErrorHandler (
