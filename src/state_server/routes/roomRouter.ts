@@ -3,6 +3,10 @@ import { roomController } from '../controllers/room';
 
 export const router = express.Router();
 
+router.get('/:id', roomController.getRoom, (req: Request, res: Response, next: NextFunction): void => {
+  res.status(200).json(res.locals.room);
+});
+
 router.get('/', roomController.getAllRooms, (req: Request, res: Response, next: NextFunction): void => {
   res.status(200).json(res.locals.rooms);
 });

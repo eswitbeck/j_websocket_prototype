@@ -4,6 +4,7 @@ import express, { Request, Response, NextFunction } from 'express';
 
 type RoomFunction = (req: Request, res: Response, next: NextFunction) => void;
 interface RoomController {
+  getRoom: RoomFunction,
   getAllRooms: RoomFunction,
   addRoom: RoomFunction,
   updateRoom: RoomFunction,
@@ -11,6 +12,31 @@ interface RoomController {
 }
 
 export const roomController: RoomController = {
+  getRoom: (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    if (isNaN(Number(id))) {
+        next(new ErrorObj('roomController: getRoom',
+                          `Invalid room id: ${id}`,
+                          400,
+                          `Invalid room id: ${id}`));
+        return;
+    }
+    const getString = `
+    SELECT * FROM ROOMS
+    WHERE id = $1;
+    `;
+    query(getString, [id], (err, results) => {
+      if (err) {
+        next(new ErrorObj('roomController: getRoom',
+                          generateQueryError(err),
+                          500,
+                          'Unknown failure returning room.'));
+        return;
+      }
+      res.locals.room = results.rows[0];
+      next();
+    });
+  },
   getAllRooms: (req: Request, res: Response, next: NextFunction) => {
     // general request from before connection to specific room; 
     // simply send all without auth
