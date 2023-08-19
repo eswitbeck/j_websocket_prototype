@@ -4,12 +4,31 @@ import express, { Request, Response, NextFunction } from 'express';
 
 type RoomFunction = (req: Request, res: Response, next: NextFunction) => void;
 interface RoomController {
+  getAllRooms: RoomFunction,
   addRoom: RoomFunction,
   updateRoom: RoomFunction,
   deleteRoom: RoomFunction
 }
 
 export const roomController: RoomController = {
+  getAllRooms: (req: Request, res: Response, next: NextFunction) => {
+    // general request from before connection to specific room; 
+    // simply send all without auth
+    const getString = `
+    SELECT * FROM ROOMS;
+    `;
+    query(getString, [], (err, results) => {
+      if (err) {
+        next(new ErrorObj('roomController: getRoom',
+                          generateQueryError(err),
+                          500,
+                          'Unknown failure returning rooms.'));
+        return;
+      }
+      res.locals.rooms = results.rows;
+      next();
+    });
+  },
   addRoom: (req: Request, res: Response, next: NextFunction) => {
     // check room body -- doesn't need room name, but will force name if not
     let name: string;
