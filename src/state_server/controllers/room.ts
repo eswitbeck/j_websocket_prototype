@@ -4,6 +4,7 @@ import express, { Request, Response, NextFunction } from 'express';
 
 type RoomFunction = (req: Request, res: Response, next: NextFunction) => void;
 interface RoomController {
+  getRoomUsers: RoomFunction,
   getRoom: RoomFunction,
   getAllRooms: RoomFunction,
   addRoom: RoomFunction,
@@ -12,6 +13,40 @@ interface RoomController {
 }
 
 export const roomController: RoomController = {
+  getRoomUsers: (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    if (isNaN(Number(id))) {
+        next(new ErrorObj('roomController: getRoom',
+                          `Invalid room id: ${id}`,
+                          400,
+                          `Invalid room id: ${id}`));
+        return;
+    }
+    const getString = `
+      SELECT u.id, username, score 
+      FROM Users u
+      INNER JOIN (
+        SELECT *
+        FROM UserRoomStates urs
+        INNER JOIN (
+          SELECT r.id
+          FROM Rooms r
+          WHERE id = $1
+        ) a ON urs.room_id = a.id
+      ) b ON u.id = b.user_id;
+    `;
+    query(getString, [id], (err, results) => {
+      if (err) {
+        next(new ErrorObj('roomController: getRoomUsers',
+                          generateQueryError(err),
+                          500,
+                          'Unknown failure returning users in room.'));
+        return;
+      }
+      res.locals.users = results.rows;
+      next();
+    });
+  },
   getRoom: (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params;
     if (isNaN(Number(id))) {

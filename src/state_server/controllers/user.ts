@@ -12,21 +12,26 @@ interface UserController {
 export const userController: UserController = {
   addUser: (req: Request, res: Response, next: NextFunction) => {
     // verify body (only needs username)
+    let insertString: string;
+    let params: string[];
     if (req.body.username === undefined || typeof req.body.username !== 'string') {
-      next(new ErrorObj('userController: addUser',
-                        'username not provided',
-                        400,
-                        'You must provide a username'));
-      return;
+        insertString = `
+          INSERT INTO Users (username)
+          VALUES ('User_' || currval(pg_get_serial_sequence('Users', 'id')))
+          RETURNING *;
+        `;
+        params = [];
+    } else {
+      // extract body
+      const { username } = req.body;
+      // insert user
+      insertString = `
+        INSERT INTO Users (username) VALUES ($1)
+        RETURNING *;
+      `;
+      params = [username];
     }
-    // extract body
-    const { username } = req.body;
-    // insert user
-    const insertString = `
-      INSERT INTO Users (username) VALUES ($1)
-      RETURNING *;
-    `;
-    query(insertString, [username], (err, result) => {
+    query(insertString, params, (err, result) => {
       if (err) {
         next(new ErrorObj('userController: addUser',
                           generateQueryError(err),
