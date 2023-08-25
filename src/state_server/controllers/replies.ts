@@ -9,7 +9,7 @@ interface ReplyController {
 
 export const replyController: ReplyController = {
   addReply: (req: Request, res: Response, next: NextFunction) => {
-    // needs text, user_id, room_id
+    // needs text, user_id, room_id, question_id
     if (req.body.text === undefined || typeof req.body.text !== 'string' ||
         req.body.user_id === undefined || typeof req.body.user_id !== 'number' ||
         req.body.question_id === undefined || typeof req.body.question_id !== 'number' ||
