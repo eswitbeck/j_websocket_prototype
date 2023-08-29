@@ -19,10 +19,11 @@
       const user_id = Math.floor(Math.random() * 100);
 
       const socket = new WebSocket('ws://localhost:3000/roomSocket');
-      const sendMessage = (type, user_id, room_id, text) => {
+      const sendMessage = (type, user_id, room_id, text, question_id) => {
         const sentObject = text
           ? { type, user_id, room_id, text }
           : { type, user_id, room_id }
+        if (question_id !== undefined) sentObject.question_id = question_id;
         socket.send(JSON.stringify(sentObject));
         return;
       }

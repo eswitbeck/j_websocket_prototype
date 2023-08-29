@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { handleSocket } from './roomWebSocket';
+import { handleSocket } from './roomWebSocketv2';
 import ErrorObj from '../util/errorHandling';
 const app = express();
 

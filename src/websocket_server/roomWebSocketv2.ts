@@ -16,10 +16,11 @@ interface Message {
   type: MessageType,
   text?: string,
   user_id: number,
-  room_id?: number
+  room_id?: number,
+  question_id?: number
 }
 
-type Socket_Id = string;
+type Socket_Id = number;
 type Room_Id = number;
 
 interface SocketIndex {
@@ -60,19 +61,68 @@ export const handleSocket = (server: Server) => {
   });
 
  wss.on('connection', async ws => {
-   const socketId = uuid();
-   socketIndex[socketId] = {
-     user_id: null,
+   // generate username and unique id
+   const user = await gameState.addUser();
+   const { username, id } = user;
+
+   socketIndex[id] = {
+     user_id: id,
      rooms: [],
-     username: null,
+     username: username,
      socket: ws
    };
 
-   ws.on('error', err => {
+   // generate regular heartbeat check
+   // on interval, clear setTimeout of disconnect
+   // then set new interval
+   const aliveState = <{ isAlive: boolean, interval: NodeJS.Timer | null }>{ isAlive: true, interval: null };
+
+   function ping (ws: WebSocket) {
+     if (!aliveState.isAlive) disconnect(ws, id, socketIndex);
+     aliveState.isAlive = false;
+     ws.ping();
+   };
+
+   aliveState.interval = setInterval(() => ping(ws), 5000);
+
+   function heartbeat () {
+     aliveState.isAlive = true;
+   }
+   
+   function disconnect (ws: WebSocket, id: number, socketIndex: SocketIndex) {
+     clearInterval(aliveState.interval);
+     // starting with socketId
+     const userInfo = socketIndex[id];
+     // otherwise close fires twice, firing an error
+     if (userInfo !== undefined) {
+       const room_ids = userInfo.rooms;
+       room_ids.map(room_id => {
+         const room = rooms[room_id];
+         // broadcast disconnect
+         broadcastFrom(room_id, id, `${userInfo.username} disconnected`);
+         // update rooms
+         if (rooms[room_id].host?.socket_id === id) rooms[room_id].host = null;
+         rooms[room_id].connections = rooms[room_id].connections
+           .filter((uState: UserState) => uState.socket_id !== id);
+         // clear up db (slightly)
+         gameState.leaveRoom(id, room_id);
+         // always remove all rooms?
+         // then need to batch cleanup
+         // on last -> delete all replies, qs, rooms, user
+       });
+       // clean up user
+       delete socketIndex[id];
+       ws.terminate();
+     }
+   }
+
+   ws.on('pong', heartbeat);
+
+   ws.on('error', (err: Error) => {
      console.error(err);
      // send notice to client
    });
-   ws.on('message', data => {
+   ws.on('message', async data => {
      const dataString = data.toString('utf-8');
      const message = JSON.parse(dataString);
      if (!isValidMessage(message)) {
@@ -81,19 +131,17 @@ export const handleSocket = (server: Server) => {
        return;
      }
      const { type, user_id, room_id } = message;
-     const userInfo = socketIndex[socketId];
-     // confirm id info tracked
-     if (userInfo.user_id === null) userInfo.user_id = user_id;
-     // force username immediately
-     if (userInfo.username === null) userInfo.username = `User_${user_id}`;
+     const userInfo = socketIndex[id];
      
      switch(type) {
        case 'room_init':
+         const roomInfo = await gameState.joinRoom(id, room_id);
+         console.log(roomInfo);
          // as long as not already in room
          if (!userInfo.rooms.includes(room_id)) {
            const uState: UserState = {
-             score: 0, // db?
-             socket_id: socketId,
+             score: roomInfo.score, // db?
+             socket_id: id,
              username: userInfo.username
            };
            // if first in room, initialize
@@ -107,7 +155,7 @@ export const handleSocket = (server: Server) => {
            userInfo.rooms.push(room_id);
            // update db if needed
            // alert clients
-           broadcastFrom(room_id, socketId, `${userInfo.username} connected`);
+           broadcastFrom(room_id, id, `${userInfo.username} connected`);
          }
          // send all room info
          ws.send(JSON.stringify(rooms[room_id]));
@@ -122,9 +170,9 @@ export const handleSocket = (server: Server) => {
            ws.send('Host already claimed'); // superfluous
          } else {
            // if not, update room, db
-           rooms[room_id].host = { socket_id: socketId, username: userInfo.username };
+           rooms[room_id].host = { socket_id: id, username: userInfo.username };
            // alert relevant clients 
-           broadcastFrom(room_id, socketId, `Host claimed by: ${userInfo.username}`);
+           broadcastFrom(room_id, id, `Host claimed by: ${userInfo.username}`);
            // send ok
            ws.send('ok');
          }
@@ -133,15 +181,17 @@ export const handleSocket = (server: Server) => {
          // confirm in room
          if (!userInfo.rooms.includes(room_id)) ws.send('Not in room');
          // confirm is host
-         else if (rooms[room_id].host?.socket_id !== socketId) ws.send('Not host.');
+         else if (rooms[room_id].host?.socket_id !== id) ws.send('Not host.');
          // update db?
          // broadcast to rel clients
          else {
            const { text } = message;
+           const question = await gameState.postQuestion(id, room_id, text);
+           console.log('q:', question);
            // change for client updates
            const questionText = `Host ${userInfo.username} prompted:
              ${text}.`
-           broadcastFrom(room_id, socketId, questionText);
+           broadcastFrom(room_id, id, questionText);
            ws.send('question posted.');
          }
          break;
@@ -150,15 +200,18 @@ export const handleSocket = (server: Server) => {
          // confirm in room
          if (!userInfo.rooms.includes(room_id)) ws.send('Not in room');
          // confirm is not host
-         else if (rooms[room_id].host?.socket_id === socketId) ws.send("Can't send as host.");
+         else if (rooms[room_id].host?.socket_id === id) ws.send("Can't send as host.");
          // if no host claimed
          else if (rooms[room_id].host === null) ws.send('Game will start when host is claimed');
          // update db?
          // send to host
          else {
+           const { question_id } = message;
+           const reply = await gameState.postReply(id, room_id, question_id, message.text);
+           console.log(reply);
            const host = rooms[room_id].host;
            const replyText = `Reply from ${userInfo.username}:
-             ${message.text}`;
+             ${reply.text}`;
            socketIndex[host.socket_id].socket.send(replyText);
            ws.send('sent response.');
          }
@@ -172,46 +225,29 @@ export const handleSocket = (server: Server) => {
        case 'change_username':
          // update socketIndex
          const oldUsername = userInfo.username;
-         userInfo.username = message.text;
+         // missing error handling
+         const updatedUser = await gameState.changeUsername(id, message.text);
+         userInfo.username = updatedUser.username;
          // update rooms
          userInfo.rooms.map(room_id => {
            const room = rooms[room_id];
            // check host
-           if (room.host?.socket_id === socketId)
+           if (room.host?.socket_id === id)
              room.host.username = userInfo.username;
            // check connections
            const roomUserState = room.connections.find(({ socket_id }) => 
-                                                       socket_id === socketId);
+                                                       socket_id === id);
            roomUserState.username = userInfo.username;
            // broadcast change
            const nameChange = `${oldUsername} changed name to ${userInfo.username}`;
-           broadcastFrom(room_id, socketId, nameChange);
+           broadcastFrom(room_id, id, nameChange);
            // add error handling
            ws.send('ok');
          });
          break;
      }
 
-     ws.on('close', () => {
-       // starting with socketId
-       const userInfo = socketIndex[socketId];
-       // otherwise close fires twice, firing an error
-       if (userInfo !== undefined) {
-         const room_ids = userInfo.rooms;
-         room_ids.map(room_id => {
-           const room = rooms[room_id];
-           // broadcast disconnect
-           broadcastFrom(room_id, socketId, `${userInfo.username} disconnected`);
-           // update rooms
-           if (rooms[room_id].host?.socket_id === socketId) rooms[room_id].host = null;
-           rooms[room_id].connections = rooms[room_id].connections
-             .filter((uState: UserState) => uState.socket_id !== socketId);
-         });
-         // clear up db
-         // clean up user
-         delete socketIndex[socketId];
-       }
-     });
+     ws.on('close', () => disconnect(ws, id, socketIndex));
    });
 
    ws.send('connected to server');
@@ -241,7 +277,9 @@ function isValidMessage (messageJSON: Message): boolean {
         messageJSON.type === 'choose_response' ||
         messageJSON.type === 'change_username') &&
        (!messageJSON?.text ||
-        typeof messageJSON.text !== 'string'))
+        typeof messageJSON.text !== 'string')) ||
+      (messageJSON.type === 'post_response' &&
+       !messageJSON?.question_id)
      ) return false;
    else return true;
 }
