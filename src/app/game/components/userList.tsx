@@ -1,13 +1,14 @@
 import React from 'react';
+import { useGameStore } from '../store';
 
 const UserList = () => {
-  const list = ['filler', 'junk'];
+  const users = useGameStore(state => state.users);
 
   return <div className="column">
     <div className="window">
       <p>Currently in game</p>
       <ul>
-        {list.map(e => <li>{e}</li>)}
+        {users.map((e: string) => <li>{e}</li>)}
       </ul>
     </div>
   </div>

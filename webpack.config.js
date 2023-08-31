@@ -9,7 +9,13 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       title: 'Game Lobby',
-      chunks: ['lobby']
+      chunks: ['lobby'],
+      filename: 'index_lobby.html'
+    }),
+    new HtmlWebpackPlugin({
+      title: 'Room',
+      chunks: ['game'],
+      filename: 'index_game.html'
     }),
   ],
   mode: 'development',
@@ -19,7 +25,13 @@ module.exports = {
     clean: true
   },
   devServer: {
-    static: './dist',
+    port: 8080,
+    proxy: {
+      '/proxy': {
+        target: 'http://localhost:3000',
+        secure: false
+      }
+    },
   },
   module: {
     rules: [

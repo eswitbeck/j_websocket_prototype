@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import ErrorObj from '../util/errorHandling';
 import { router as userRouter } from './routes/userRouter';
 import { router as roomRouter } from './routes/roomRouter';
@@ -7,6 +8,7 @@ import { router as replyRouter } from './routes/replyRouter';
 import { router as userRoomStateRouter } from './routes/userRoomStateRouter';
 const app = express();
 
+app.use(cors());
 app.use(express.json()); 
 
 // /users endpoint

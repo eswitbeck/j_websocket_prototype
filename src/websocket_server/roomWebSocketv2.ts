@@ -127,7 +127,7 @@ export const handleSocket = (server: Server) => {
      const message = JSON.parse(dataString);
      if (!isValidMessage(message)) {
        // log on server
-       ws.send('Invalid message');
+       ws.send(JSON.stringify({ type: 'error', payload: 'Invalid message' }));
        return;
      }
      const { type, user_id, room_id } = message;
@@ -136,7 +136,6 @@ export const handleSocket = (server: Server) => {
      switch(type) {
        case 'room_init':
          const roomInfo = await gameState.joinRoom(id, room_id);
-         console.log(roomInfo);
          // as long as not already in room
          if (!userInfo.rooms.includes(room_id)) {
            const uState: UserState = {
@@ -158,7 +157,7 @@ export const handleSocket = (server: Server) => {
            broadcastFrom(room_id, id, `${userInfo.username} connected`);
          }
          // send all room info
-         ws.send(JSON.stringify(rooms[room_id]));
+         ws.send(JSON.stringify({ type: 'init_info', payload: rooms[room_id] }));
          break;
        case 'claim_host':
          // confirm in room
@@ -250,7 +249,7 @@ export const handleSocket = (server: Server) => {
      ws.on('close', () => disconnect(ws, id, socketIndex));
    });
 
-   ws.send('connected to server');
+   ws.send(JSON.stringify({ type: 'init', payload: [id, username] }));
  });
 
  wss.on('close', async () => {
